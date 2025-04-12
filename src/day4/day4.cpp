@@ -1,4 +1,5 @@
 #include "day4.h"
+
 #include <vector>
 #include <string>
 #include <boost/algorithm/string.hpp>
