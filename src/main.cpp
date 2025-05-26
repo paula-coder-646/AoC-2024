@@ -8,9 +8,14 @@
 #include "day8/day8.h"
 #include "day9/day9.h"
 #include "day10/day10.h"
+#include "day11/day11.h"
+#include "day12/day12.h"
+#include "day13/day13.h"
+#include "day14/day14.h"
+
 
 int main() {
-	day10_();
+	day14_();
 }
 
 

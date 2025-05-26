@@ -17,11 +17,11 @@
 #include <boost/functional/hash.hpp>
 
 template<>
-struct std::hash<Eigen::Matrix<int, 2, 1>> {
-	std::size_t operator()(const Eigen::Matrix<int, 2, 1>& vec) const noexcept {
+struct std::hash<std::pair<uint32_t, uint32_t>> {
+	std::size_t operator()(const std::pair<uint32_t, uint32_t>& vec) const noexcept {
 		// Hash the two components (x and y)
-		std::size_t hash1 = std::hash<int>{}(vec.x());
-		std::size_t hash2 = std::hash<int>{}(vec.y());
+		std::size_t hash1 = std::hash<int>{}(vec.first);
+		std::size_t hash2 = std::hash<int>{}(vec.second);
 
 		// Combine the hashes using XOR and bit-shifting
 		boost::hash_combine(hash1, hash2);
@@ -32,11 +32,11 @@ struct std::hash<Eigen::Matrix<int, 2, 1>> {
 struct Graph {
 
 	std::unordered_map<uint32_t, std::vector<uint32_t>> graph;
-	std::unordered_map<Eigen::Vector2i, uint32_t> height;
-	std::unordered_map<uint32_t, Eigen::Vector2i> heads;
-	std::unordered_map<uint32_t, Eigen::Vector2i> peaks;
+	std::unordered_set<uint32_t> heads;
+	std::unordered_set<uint32_t> peaks;
 	std::pair<uint32_t, uint32_t> dim;
 	std::unordered_map<uint32_t, int32_t> indegree;
+	std::unordered_map<std::pair<uint32_t, uint32_t>, uint8_t> height;
 	uint32_t reachable = 0;
 };
 
@@ -50,11 +50,10 @@ static Graph parseInput(const std::string& input) {
 		for(uint32_t x = 0; x < line.size(); x++) {
 			if(line[x] != '.') {
 				cols = line.size();
-				Eigen::Vector2i pos(x, y);
 				uint32_t nodeid = getID(x, y);
-				if (std::stoul(std::string(1, line[x])) == 0) result.heads[nodeid] = pos;
-				if (std::stoul(std::string(1, line[x])) == 9) result.peaks[nodeid] = pos;
-				result.height[pos] = std::stoul(std::string(1, line[x]));
+				if (std::stoul(std::string(1, line[x])) == 0) result.heads.insert(nodeid);
+				if (std::stoul(std::string(1, line[x])) == 9) result.peaks.insert(nodeid);
+				result.height[std::make_pair(x, y)] = std::stoul(std::string(1, line[x]));
 				result.graph[nodeid];
 			}
 		}
@@ -65,19 +64,23 @@ static Graph parseInput(const std::string& input) {
 }
 
 void buildGraph(Graph &input) {
-	std::vector<Eigen::Vector2i> directions = {Eigen::Vector2i{1, 0}, Eigen::Vector2i{-1,0},Eigen::Vector2i{0,1},Eigen::Vector2i{0,-1}};
-	auto getNode = [&](Eigen::Vector2i vec){return vec.y() * input.dim.first + vec.x();};
-	auto getVec = [&](uint32_t node) {return Eigen::Vector2i{node % input.dim.first, node / input.dim.first, };};
+	std::vector<std::pair<int8_t, int8_t>> directions = {{1, 0},{-1,0},{0,1},{0,-1}};
+	auto getNode = [&](std::pair<int8_t, int8_t> vec){return vec.second * input.dim.first + vec.first;};
+	auto getVec = [&](uint32_t node) {return std::make_pair(node % input.dim.first, node / input.dim.first);};
 	for (const std::pair<uint32_t, std::vector<uint32_t>> &nodepair : input.graph) {
-		for(auto &dir : directions) {
-			Eigen::Vector2i neighbor_pos = getVec(nodepair.first) + dir; // Check all adjacent neigbors
-			if (neighbor_pos.x() >= (int)0 && neighbor_pos.x() < (int)input.dim.first
-					&& neighbor_pos.y() >= (int)0 && neighbor_pos.y() < (int) input.dim.second
-					&& input.graph.count(getNode(neighbor_pos))) {
-				auto neighbor_height = input.height[neighbor_pos];
+		for(auto &[dx, dy] : directions) {
+			int32_t neigx = getVec(nodepair.first).first + dx;
+			int32_t neigy = getVec(nodepair.first).second + dy;
+			std::pair<int32_t, int32_t> neigvec = std::make_pair(neigx, neigy);
+
+
+			if (neigx >= (int)0 && neigx < (int)input.dim.first
+					&& neigy >= (int)0 && neigy < (int) input.dim.second
+					&& input.graph.count(getNode(neigvec))) {
+				auto neighbor_height = input.height.at(neigvec);
 				auto height = input.height[getVec(nodepair.first)];
 				if ((neighbor_height - height) == 1) {
-					auto neighbor_node = getNode(neighbor_pos);
+					auto neighbor_node = getNode(neigvec);
 					input.graph[nodepair.first].push_back(neighbor_node);
 				}
 			}
@@ -99,8 +102,8 @@ std::unordered_set<uint32_t> MiniBFS(Graph& input, uint32_t start = 0, bool reac
 
 	if (reach) {
 		for (auto head : input.heads) {
-			toVisit.push(head.first);
-			result.insert(head.first);
+			toVisit.push(head);
+			result.insert(head);
 		}
 	} else toVisit.push(start);
 
@@ -137,7 +140,7 @@ std::vector<uint32_t> topoSort(Graph& input) {
 		}
 	}
 	for(const auto& head : input.heads) {
-		tosort.push(head.first);
+		tosort.push(head);
 	}
 
 	while(!tosort.empty()) {
@@ -162,7 +165,7 @@ uint32_t countWays(Graph& input) {
 		/* if(head.first == 48) {
 		(//	ways[head.first] = 1;// 2 4 20 38 42 45 48 54 57
 		}*/
-		ways[head.first] = 1;
+		ways[head] = 1;
 	}
 
 	for (auto node : order) {
@@ -180,8 +183,8 @@ uint32_t countWays(Graph& input) {
 }
 static void partOne(Graph& input){
 	//For all trailheads find reachable peaks
-	uint32_t result = std::transform_reduce(input.heads.begin(), input.heads.end(), 0, std::plus{}, [&](std::pair<uint32_t, Eigen::Vector2i> head) -> uint32_t {
-		return MiniBFS(input, head.first).size();
+	uint32_t result = std::transform_reduce(input.heads.begin(), input.heads.end(), 0, std::plus{}, [&](uint32_t head) -> uint32_t {
+		return MiniBFS(input, head).size();
 	});
 	std::cout << "Number of reachable Peaks: " << result << std::endl;
 	return;
